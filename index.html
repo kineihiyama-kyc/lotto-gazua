@@ -42,6 +42,34 @@
     function generate(){const wanted=Number($('count').value),tickets=[],seen=new Set();while(tickets.length<wanted){const ticket=randomTicket(),id=key(ticket);if(!winners.has(id)&&!seen.has(id)){tickets.push(ticket);seen.add(id)}}lastTickets=tickets;renderTickets(tickets);$('status').textContent='새 조합을 만들었어요. 행운을 빌어요!';$('status').className='status'}
     async function load(refresh=false){try{const response=await fetch('lotto-history.json'+(refresh?'?v='+Date.now():''),{cache:'no-store'});if(!response.ok)throw Error();const history=await response.json();winners=new Set(history.map(item=>key(item.numbers)));renderFrequencyBars(history);const total=history.length,duplicates=total-winners.size;$('history-count').textContent=total.toLocaleString('ko-KR')+'개';$('duplicate-count').textContent=duplicates.toLocaleString('ko-KR')+'개';$('generate').disabled=winners.size===0;$('status').textContent='';$('status').className='status';const newest=history.at(-1);$('updated').textContent=newest?'최근 반영 회차: '+newest.round+'회 ('+newest.date+')':''}catch{$('status').textContent='당첨 이력을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';$('status').className='status error';$('generate').disabled=true}}
     $('generate').onclick=generate;$('again').onclick=generate;$('copy').onclick=async()=>{const text=lastTickets.map((ticket,i)=>String.fromCharCode(65+i)+'  '+ticket.join(', ')).join('\n');try{await navigator.clipboard.writeText(text);$('copy').textContent='복사됨!';setTimeout(()=>{$('copy').textContent='번호 복사'},1500)}catch{$('status').textContent='번호 복사에 실패했습니다. 직접 선택해 복사해 주세요.';$('status').className='status error'}};$('sync').onclick=async()=>{$('status').textContent='배포된 최신 이력을 불러오는 중…';$('status').className='status';$('generate').disabled=true;await load(true)};load();
+    const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+    async function synchronize(){
+      const start=await fetch('/api/sync',{cache:'no-store'});
+      if(!start.ok)throw Error();
+      for(let attempt=0;attempt<25;attempt++){
+        await wait(500);
+        const response=await fetch('/api/history?'+Date.now(),{cache:'no-store'});
+        if(!response.ok)throw Error();
+        const payload=await response.json();
+        if(!payload.sync.running){
+          if(!payload.sync.message.includes('\ud655\uc778'))throw Error();
+          return payload.sync.message;
+        }
+      }
+      throw Error();
+    }
+    $('sync').onclick=async()=>{
+      $('status').textContent='\ub2f9\ucc28 \uc774\ub825\uc744 \uc2e4\uc81c\ub85c \uac31\uc2e0\ud558\ub294 \uc911\u2026';
+      $('status').className='status';
+      $('generate').disabled=true;
+      try{
+        $('status').textContent=await synchronize();
+      }catch{
+        await load(true);
+        $('status').textContent='\uacf5\uac1c \ud398\uc774\uc9c0\uc5d0\uc11c\ub294 \uc790\ub3d9 \uac31\uc2e0\ub41c \ucd5c\uc2e0 \uc774\ub825\uc744 \ubd88\ub7ec\uc654\uc5b4\uc694.';
+      }
+      $('status').className='status';
+    };
   </script>
 </body>
 </html>
